@@ -99,13 +99,14 @@ def import_annotations(con: sqlite3.Connection, path: Path, author: str) -> tupl
         if label not in LABELS or label == "?":
             skipped += 1
             continue
-        a, b = sorted([r.left_id, r.right_id])
+        (a, pa), (b, pb) = sorted([(r.left_id, r.fichier_A), (r.right_id, r.fichier_B)])
         con.execute(
-            "INSERT INTO decision (action, left_id, right_id, relation, author, created_at, comment) "
-            "VALUES ('annoter', ?, ?, ?, ?, ?, ?) "
+            "INSERT INTO decision (action, left_id, right_id, relation, author, created_at, comment, left_path, right_path) "
+            "VALUES ('annoter', ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(left_id, right_id, action) DO UPDATE SET relation=excluded.relation, "
-            "author=excluded.author, created_at=excluded.created_at, comment=excluded.comment",
-            (a, b, label, author, now, r.commentaire))
+            "author=excluded.author, created_at=excluded.created_at, comment=excluded.comment, "
+            "left_path=excluded.left_path, right_path=excluded.right_path",
+            (a, b, label, author, now, r.commentaire, pa, pb))
         ok += 1
     con.commit()
     return ok, skipped

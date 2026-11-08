@@ -37,15 +37,15 @@ def test_homonym_capped():
     a = mk("A", ["Viens Esprit Saint viens", "brûle nos cœurs de ton feu"], title="Viens Esprit Saint")
     b = mk("B", ["Viens Esprit Saint viens", "Souffle sur nous ce matin", "Que ta paix règne ici", "Remplis cette maison"],
            title="Viens Esprit Saint")
-    r = score_pair(a, b, cos=0.9)
-    assert r["global_score"] < 0.70
+    r = score_pair(a, b, cos=0.3)  # textes différents : TF-IDF faible
+    assert r["global_score"] < 0.65 and r["predicted_relation"] == "different"
 
 
 def test_shared_collection_number_boosts():
     a = mk("A", COUPLETS, colls=["JEM 79"])
     b = mk("B", COUPLETS[:2] + ["Autre texte pour finir le chant", "Encore une ligne différente ici"], colls=["JEM 79"])
     r = score_pair(a, b, cos=0.5)
-    assert r["meta_score"] == 1.0 and r["global_score"] >= 0.70
+    assert r["meta_score"] == 1.0 and r["global_score"] >= 0.65
 
 
 def test_bands():

@@ -42,14 +42,15 @@ def build_match_report(versions: pd.DataFrame, cands: pd.DataFrame, n_files: int
     ann = cands.dropna(subset=["human_relation"])
     if len(ann):
         out.append("## Évaluation sur les paires annotées\n")
+        seuil = next(th for th, name in BANDS if name == "probable")
         ann = ann.assign(meme_chant_humain=ann.human_relation != "different",
-                         propose=ann.global_score >= 0.70)
+                         propose=ann.global_score >= seuil)
         tp = (ann.propose & ann.meme_chant_humain).sum()
         fp = (ann.propose & ~ann.meme_chant_humain).sum()
         fn = (~ann.propose & ann.meme_chant_humain).sum()
         prec = tp / (tp + fp) if tp + fp else 0
         rec = tp / (tp + fn) if tp + fn else 0
-        out.append(f"- {len(ann)} paires annotées. Seuil « même chant » = 0,70 → "
+        out.append(f"- {len(ann)} paires annotées. Seuil « même chant » = {seuil:.2f} → "
                    f"précision **{prec:.0%}**, rappel **{rec:.0%}**\n")
         by_band = ann.groupby("confidence_band").meme_chant_humain.agg(["count", "mean"]).reset_index()
         by_band.columns = ["bande", "paires annotées", "part réellement même chant"]

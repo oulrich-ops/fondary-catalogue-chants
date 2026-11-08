@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-SONG_LINK = 0.70        # score minimal d'un lien machine « même chant »
+SONG_LINK = 0.65        # score minimal d'un lien machine « même chant » (= début de la bande « probable »)
 LINKED = 0.50           # une paire croisée compte comme liée au-dessus de ce score
 COHESION_MIN = 0.50     # il faut PLUS de 50 % de paires croisées liées pour fusionner deux groupes
 SAME_SONG = {"meme_version", "courte_longue", "variante", "traduction"}

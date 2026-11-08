@@ -80,6 +80,13 @@ def test_inline_choeur_without_markers():
     assert ly.sections[2].text_key == "second couplet"
 
 
+def test_dash_verse_numbers():
+    ly = parse_lyrics("[V]\n 1- Soyons la lumière\n suite\n 2- Partageons\n")
+    assert [s.text_key for s in ly.sections] == ["soyons la lumiere suite", "partageons"]
+    ly = parse_lyrics("[V1]\n 1- Le Seigneur seul\n")
+    assert ly.sections[0].text_key == "le seigneur seul"
+
+
 def test_zero_is_not_a_verse_number():
     ly = parse_lyrics("[V1]\n1 0 MON DIEU\n suite\n2 deuxième\n")
     assert [s.label for s in ly.sections] == ["V1", "V2"]

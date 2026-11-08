@@ -16,8 +16,10 @@ import pandas as pd
 PERSISTENT_DDL = [
     """CREATE TABLE IF NOT EXISTS version_registry (
         content_hash TEXT PRIMARY KEY,
-        version_id   TEXT UNIQUE NOT NULL,
+        version_id   TEXT NOT NULL,
         created_at   TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS version_file_history (
+        path TEXT PRIMARY KEY, version_id TEXT NOT NULL, updated_at TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS decision (
         decision_id INTEGER PRIMARY KEY AUTOINCREMENT,
         action      TEXT NOT NULL,          -- annoter, confirmer, fusionner, separer, ...
@@ -27,6 +29,8 @@ PERSISTENT_DDL = [
         author      TEXT,
         created_at  TEXT NOT NULL,
         comment     TEXT,
+        left_path   TEXT,                   -- fichier de chaque côté : retrouve la version même si son VE- change
+        right_path  TEXT,
         UNIQUE(left_id, right_id, action))""",
 ]
 
@@ -36,20 +40,55 @@ META_COLS = ["meta_author", "meta_copyright", "meta_ccli", "meta_hymn_number", "
 def ensure_schema(con: sqlite3.Connection) -> None:
     for ddl in PERSISTENT_DDL:
         con.execute(ddl)
+    _migrate(con)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(decision)")}
+    for c in ("left_path", "right_path"):
+        if c not in cols:
+            con.execute(f"ALTER TABLE decision ADD COLUMN {c} TEXT")
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    """Anciennes bases : version_id était UNIQUE dans version_registry ; un VE- peut désormais
+    avoir plusieurs empreintes successives (texte corrigé, nettoyage amélioré)."""
+    sql = con.execute("SELECT sql FROM sqlite_master WHERE name='version_registry'").fetchone()
+    if sql and "UNIQUE NOT NULL" in sql[0]:
+        con.executescript("""
+            ALTER TABLE version_registry RENAME TO version_registry_old;
+            CREATE TABLE version_registry (content_hash TEXT PRIMARY KEY, version_id TEXT NOT NULL, created_at TEXT NOT NULL);
+            INSERT INTO version_registry SELECT * FROM version_registry_old;
+            DROP TABLE version_registry_old;""")
 
 
 def _assign_ids(con: sqlite3.Connection, files: pd.DataFrame) -> dict[str, str]:
+    """content_hash -> VE-xxxxx, stable même quand l'empreinte d'un texte change.
+
+    1. empreinte déjà connue -> son identifiant ;
+    2. sinon, l'identifiant qu'avaient les mêmes FICHIERS au passage précédent (historique par chemin) ;
+    3. sinon (ou si l'identifiant est déjà pris par une autre empreinte), un nouvel identifiant.
+    """
     reg = dict(con.execute("SELECT content_hash, version_id FROM version_registry"))
+    hist = dict(con.execute("SELECT path, version_id FROM version_file_history"))
     last = max((int(v.split("-")[1]) for v in reg.values()), default=0)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    # ordre déterministe : premier chemin rencontré
-    new = (files[~files.content_hash.isin(reg)].groupby("content_hash").path.min().sort_values())
-    for h in new.index:
-        last += 1
-        vid = f"VE-{last:05d}"
-        reg[h] = vid
-        con.execute("INSERT INTO version_registry VALUES (?,?,?)", (h, vid, now))
-    return reg
+
+    groups = files.groupby("content_hash").path.apply(sorted)
+    # les empreintes avec le plus de fichiers choisissent d'abord ; ordre déterministe
+    order = sorted(groups.index, key=lambda h: (h not in reg, -len(groups[h]), groups[h][0]))
+    out: dict[str, str] = {}
+    used: set[str] = set()
+    for h in order:
+        cand = reg.get(h)
+        if cand is None:
+            prev = Counter(hist[p] for p in groups[h] if p in hist)
+            cand = next((v for v, _ in prev.most_common() if v not in used), None)
+        if cand is None or cand in used:
+            last += 1
+            cand = f"VE-{last:05d}"
+        used.add(cand)
+        out[h] = cand
+        if reg.get(h) != cand:
+            con.execute("INSERT OR REPLACE INTO version_registry VALUES (?,?,?)", (h, cand, now))
+    return out
 
 
 def build_versions(con: sqlite3.Connection) -> pd.DataFrame:
@@ -94,5 +133,8 @@ def build_versions(con: sqlite3.Connection) -> pd.DataFrame:
     versions = pd.DataFrame(rows)
     versions.to_sql("song_version", con, if_exists="replace", index=False)
     files[["file_id", "version_id", "is_preferred_file"]].to_sql("file_version", con, if_exists="replace", index=False)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    con.executemany("INSERT OR REPLACE INTO version_file_history VALUES (?,?,?)",
+                    [(p, v, now) for p, v in zip(files.path, files.version_id)])
     con.commit()
     return versions

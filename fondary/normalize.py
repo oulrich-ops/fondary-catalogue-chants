@@ -125,7 +125,7 @@ _INSTRUCTION = re.compile(r"^\(?\s*(ref|refrain|chorus|bis|ter|x\s*\d+|\d+\s*x)\
 _REPEAT = re.compile(r"[\[\(]\s*(bis|x\s*\d+|\d+\s*x|ter)\s*[\]\)]|\bx\s*\d\b", re.I)
 _INLINE_CHORUS = re.compile(r"^\s*(?:ch(?:oe|œ)ur|refrain|ref|chorus)\s*\d*\s*[.:]\s*(.*)$", re.I)
 _INLINE_LABEL = "\x00C"  # marqueur interne, renommé en « C » après lecture
-_NUMBERED = re.compile(r"^([1-9]\d?)[ .)]\s*(.*)$")  # pas 0 : souvent un « O » mal tapé
+_NUMBERED = re.compile(r"^([1-9]\d?)(?:[ .)]|-(?!\d))\s*(.*)$")  # « 1 », « 1. », « 1) », « 1- » ; pas 0 (souvent un « O »)
 
 KIND_BY_PREFIX = [
     ("pre-refrain", r"^(p|pr|pre)\d*$"),  # OpenSong : P = pre-chorus

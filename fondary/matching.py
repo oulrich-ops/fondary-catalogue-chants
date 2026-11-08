@@ -20,15 +20,20 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from .normalize import comparison_key
 
-# ---------------------------------------------------------------- paramètres (à calibrer)
-WEIGHTS = {"coverage": 0.45, "tfidf": 0.20, "incipit": 0.15, "title": 0.10, "meta": 0.10}
+# ---------------------------------------------------------------- paramètres
+# Calibrés le 2026-11-08 sur 297 paires annotées (annotations/paires_a_annoter.xlsx, auteur « claude ») :
+# à 0,65 -> précision ≈ 96 %, rappel ≈ 86 % (ancien réglage à 0,70 : 95 % / 80 %).
+# Enseignement clé : le recouvrement MINIMAL (A dans B ET B dans A) sépare bien mieux que le
+# maximal, qui gonfle les textes très courts (« Alléluia ») contenus dans beaucoup d'autres.
+WEIGHTS = {"coverage_max": 0.15, "coverage_min": 0.15, "tfidf": 0.35, "incipit": 0.20, "title": 0.10, "meta": 0.05}
 LINE_MATCH = 85          # ratio rapidfuzz pour considérer deux lignes identiques
 FULL = 0.90              # recouvrement « ≈ 1 »
-PARTIAL = 0.30           # en dessous : textes différents
+PARTIAL = 0.30           # recouvrement minimal en dessous duquel les textes sont jugés différents
+MIN_CHARS_TRANSLATION = 120  # en dessous, la détection de langue n'est pas fiable
 TFIDF_TOP_K = 10
 TFIDF_MIN = 0.30
 MAX_BLOCK = 40           # un bloc plus gros (« psaume », « alleluia ») est ignoré pour le blocking par titre
-BANDS = [(0.90, "tres_forte"), (0.70, "probable"), (0.50, "incertaine"), (0.0, "rejet")]
+BANDS = [(0.90, "tres_forte"), (0.65, "probable"), (0.50, "incertaine"), (0.0, "rejet")]
 
 
 @dataclass
@@ -170,31 +175,33 @@ def band_of(s: float) -> str:
 
 
 def relation_of(a: V, b: V, ab: float, ba: float) -> str:
-    if a.lang != b.lang and "?" not in (a.lang, b.lang):
+    if (a.lang != b.lang and "?" not in (a.lang, b.lang)
+            and min(a.n_chars, b.n_chars) >= MIN_CHARS_TRANSLATION):
         return "traduction_possible"
     if ab >= FULL and ba >= FULL:
         return "meme_version"
     if ab >= FULL or ba >= FULL:
         return "courte_longue"
-    if max(ab, ba) >= PARTIAL:
+    if min(ab, ba) >= PARTIAL:
         return "variante"
     return "different"
 
 
 def score_pair(a: V, b: V, cos: float) -> dict:
     ab, ba = coverage(a, b)
-    cov = max(ab, ba)
+    cov, cov_min = max(ab, ba), min(ab, ba)
     t, inc = title_sim(a, b), incipit_sim(a, b)
     meta, conflict, meta_txt = meta_signals(a, b)
-    s = (WEIGHTS["coverage"] * cov + WEIGHTS["tfidf"] * cos + WEIGHTS["incipit"] * inc
-         + WEIGHTS["title"] * t + WEIGHTS["meta"] * meta)
+    s = (WEIGHTS["coverage_max"] * cov + WEIGHTS["coverage_min"] * cov_min + WEIGHTS["tfidf"] * cos
+         + WEIGHTS["incipit"] * inc + WEIGHTS["title"] * t + WEIGHTS["meta"] * meta)
+    probable = next(th for th, name in BANDS if name == "probable")
     rules = []
-    if meta == 1.0 and cov >= 0.5 and s < 0.70:
-        s, _ = 0.70, rules.append("même n° de recueil → au moins probable")
-    if t >= 0.99 and cov < PARTIAL and s >= 0.70:
-        s, _ = 0.69, rules.append("titre identique mais texte différent → homonyme ?")
-    if conflict and cov < 0.5 and s >= 0.70:
-        s, _ = 0.69, rules.append("n° de recueil différents → plafonné")
+    if meta == 1.0 and cov >= 0.5 and s < probable:
+        s, _ = probable, rules.append("même n° de recueil → au moins probable")
+    if t >= 0.99 and cov < PARTIAL and s >= probable:
+        s, _ = probable - 0.01, rules.append("titre identique mais texte différent → homonyme ?")
+    if conflict and cov < 0.5 and s >= probable:
+        s, _ = probable - 0.01, rules.append("n° de recueil différents → plafonné")
     rel = relation_of(a, b, ab, ba)
     short = ""
     if rel == "courte_longue":
@@ -210,15 +217,41 @@ def score_pair(a: V, b: V, cos: float) -> dict:
     }
 
 
+def current_decisions(con: sqlite3.Connection) -> dict[tuple[str, str], tuple[int, str]]:
+    """Décisions humaines rattachées aux versions ACTUELLES.
+
+    Une décision désigne ses versions par VE- et par chemin de fichier : si un fichier a changé de
+    version (texte corrigé, nettoyage amélioré), c'est le chemin qui fait foi.
+    """
+    dec = pd.read_sql("SELECT * FROM decision ORDER BY decision_id", con)
+    if dec.empty:
+        return {}
+    path_to_v = dict(con.execute(
+        "SELECT sf.path, fv.version_id FROM file_version fv JOIN source_file sf USING(file_id)"))
+    out = {}
+    for r in dec.itertuples():
+        a = path_to_v.get(getattr(r, "left_path", None) or "", r.left_id)
+        b = path_to_v.get(getattr(r, "right_path", None) or "", r.right_id)
+        if a != b:
+            out[(min(a, b), max(a, b))] = (r.decision_id, r.relation)
+    return out
+
+
 def apply_decisions(con: sqlite3.Connection, cands: pd.DataFrame) -> pd.DataFrame:
-    dec = pd.read_sql("SELECT left_id, right_id, relation, decision_id FROM decision ORDER BY decision_id", con)
+    last = current_decisions(con)
     cands["decision_id"] = pd.NA
     cands["human_relation"] = pd.NA
-    if dec.empty:
+    if not last:
         return cands
-    last = {}
-    for r in dec.itertuples():
-        last[(min(r.left_id, r.right_id), max(r.left_id, r.right_id))] = (r.decision_id, r.relation)
+    # une paire décidée qui n'était pas candidate est ajoutée : la décision doit toujours compter
+    known = set(zip(cands.left_id, cands.right_id))
+    extra = [{"left_id": a, "right_id": b, "level": "version", "blocking": "decision",
+              "global_score": 0.0, "confidence_band": "rejet", "predicted_relation": "different",
+              "explanation": "paire ajoutée par une décision humaine", "rules": ""}
+             for (a, b) in last if (a, b) not in known]
+    if extra:
+        cands = pd.concat([cands, pd.DataFrame(extra)], ignore_index=True)
+        cands["pair_id"] = [f"PA-{i + 1:06d}" for i in range(len(cands))]
     for i, (a, b) in enumerate(zip(cands.left_id, cands.right_id)):
         if (a, b) in last:
             cands.iat[i, cands.columns.get_loc("decision_id")] = last[(a, b)][0]

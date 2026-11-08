@@ -118,6 +118,6 @@ Fichiers générés, non versionnés : `data/catalogue.sqlite`, `reports/`, `ann
 - [x] Doublons exacts, candidats, score, relation
 - [x] Regroupement en chants, catalogue, codes et libellés de versions
 - [x] Recherche, liste de célébration, export de set OpenSong
-- [ ] Annoter 200 à 300 paires et régler les seuils
+- [x] Annoter 300 paires et régler les poids et seuils : précision ≈ 96 %, rappel ≈ 87 % sur ces paires (annotations faites par Claude, à faire relire par un humain)
 - [ ] Écran de revue (valider, fusionner, séparer) pour les éditeurs du catalogue
 - [ ] Tester un set exporté dans OpenSong sur un vrai culte
