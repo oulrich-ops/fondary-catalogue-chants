@@ -1,21 +1,29 @@
 # Fondary · Catalogue des chants OpenSong
 
-Retrouver **le bon chant, dans la bonne version, sans ouvrir dix fichiers.**
+**Retrouver le bon chant, dans la bonne version, sans ouvrir dix fichiers.**
 
-Une bibliothèque OpenSong accumule au fil des années des doublons (`Paix profonde`, `paix profonde (1)`, `PAIX PROFONDE - copie`), des chants retitrés, des versions courtes ou longues, des traductions. Ce projet lit tous les fichiers et range chaque chant sur trois niveaux :
+La bibliothèque OpenSong contient 5 284 fichiers, avec des doublons (`Paix profonde`, `paix profonde (1)`…), des chants retitrés et des versions courtes ou longues. L'outil les range en **chants** et en **versions**, puis prépare le **set** d'un culte à partir d'une simple liste.
 
-| Niveau | Question | Exemple |
-|---|---|---|
-| **Chant** `CH-00218` | De quel chant parle-t-on ? | *Ô grâce infinie* |
-| **Version** `CH-00218.fr.courte` | Quelles paroles exactes ? | FR · courte — couplets 1 et 3 |
-| **Fichier** | Quel fichier ouvrir ? | `Ô grâce infinie.xml` |
+OpenSong n'est jamais modifié : l'outil lit les chants et écrit seulement des sets.
 
-- **Doublon** = plusieurs fichiers pour une même version.
-- **Variante** = plusieurs versions pour un même chant.
+## Résultats
 
-**OpenSong n'est jamais modifié.** Le catalogue est une couche au-dessus. Le seul fichier produit pour OpenSong est un *set* (liste de chants d'un culte), créé comme un nouveau fichier.
+| | |
+|---|---|
+| Fichiers lus | 5 284 |
+| Chants identifiés | 2 991 |
+| Fiabilité des regroupements | 96 % (vérifiée sur 300 cas) |
+| Set généré puis ouvert dans OpenSong | ✅ |
 
----
+## Comment ça marche
+
+```
+Fichiers OpenSong ──► Lire et nettoyer ──► Comparer ──► Regrouper en chants ──► Vérifier (humain)
+                                                                                     │
+Set OpenSong ◄──────── Retrouver chaque chant ◄──── Liste du culte ◄──── Catalogue ◄─┘
+```
+
+On colle la liste du culte, un chant par ligne, même avec des fautes (« a toi la glore »). L'outil retrouve chaque chant, choisit la version et écrit le set.
 
 ## Démarrer
 
@@ -24,115 +32,24 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
 ```
 
-Ouvrez ensuite **`00_PILOTAGE_COMMENCER_ICI.ipynb`** dans VS Code, choisissez le noyau `.venv` et exécutez les cellules dans l'ordre (**Maj + Entrée**). Tout y est : traitement, recherche, préparation d'un culte, annotation.
+Ouvrir **`00_PILOTAGE_COMMENCER_ICI.ipynb`** dans VS Code et exécuter les cellules dans l'ordre.
+Les chants sont attendus dans `chant_xml/Chants XML/`. Ce dossier n'est pas publié, car les paroles sont soumises au droit d'auteur.
 
-Le dossier des chants est attendu dans `chant_xml/Chants XML/`. Il n'est **pas** inclus dans le dépôt, car les paroles sont soumises au droit d'auteur. Indiquez un autre chemin dans la variable `SOURCE` du notebook si besoin.
+## Outils
 
----
-
-## Comment ça marche
-
-```
-Fichiers OpenSong ──► 1. Lire ──► 2. Nettoyer ──► 3. Doublons exacts ──► 4. Candidats ──► 5-6. Score
-   (lecture seule)                                                                            │
-                                                                                              ▼
-   Set OpenSong ◄── 10. Recherche ◄── 9. Catalogue ◄── 8. Validation humaine ◄── 7. Regroupement
-```
-
-1. **Lire** chaque fichier XML, sans jamais l'écrire.
-2. **Nettoyer** : découper en couplets et refrain, retirer accords et « (bis) », extraire le recueil du titre (`JEM 079`), produire une clé sans accents ni ponctuation.
-3. **Doublons exacts** : les fichiers aux paroles identiques forment une seule version.
-4. **Candidats** : seules les paires plausibles sont comparées (même titre, même recueil, voisins TF-IDF), soit environ 17 000 au lieu de 9,4 millions.
-5. **Signaux** : part des lignes de A retrouvées dans B et inversement, similarité globale, titre, première ligne, recueil, auteur.
-6. **Score** de 0 à 1, bande de confiance (très forte, probable, incertaine, rejet) et relation proposée (même version, courte/longue, variante, traduction, différent).
-7. **Regroupement** en chants, avec un garde-fou contre les chaînes (A ressemble à B, B à C, mais A pas à C).
-8. **Validation humaine** : chaque décision est enregistrée et réappliquée à chaque relance.
-9. **Catalogue** : titre canonique, version de référence, codes et libellés de version stables.
-10. **Recherche** tolérante aux fautes, fiche chant, liste de célébration vers set OpenSong.
-
-Le traitement est **rejouable** : on peut ajouter des fichiers ou améliorer l'algorithme et relancer, sans perdre aucune décision. Les identifiants `CH-` et `VE-` ne sont jamais réattribués, et une fusion laisse une redirection.
-
----
-
-## Outils utilisés
-
-| Outil | Rôle dans le projet |
+| Outil | Rôle |
 |---|---|
-| **Python 3.12** | Langage du projet |
-| **lxml** | Lecture tolérante des fichiers XML OpenSong, même mal formés |
-| **charset-normalizer** | Détection de l'encodage des vieux fichiers non UTF-8 |
-| **unidecode** | Suppression des accents pour comparer (« À toi » devient « a toi ») |
-| **lingua** | Détection de la langue de chaque chant |
-| **rapidfuzz** | Ressemblance entre textes malgré les fautes : titres, lignes, recherche |
-| **scikit-learn** | TF-IDF sur des morceaux de 3 à 5 lettres, pour trouver vite les chants proches |
-| **numpy** | Calculs sur les tableaux de scores |
-| **pandas** | Manipulation des tableaux, statistiques, lecture et écriture SQLite et Excel |
-| **SQLite** | Base du catalogue : un seul fichier, aucun serveur |
-| **openpyxl** | Fichiers Excel (rapports, fiche d'annotation avec liste déroulante) |
-| **tabulate** | Tableaux des rapports Markdown |
-| **Typer** | Commandes `python -m fondary …` |
-| **Jupyter** (ipykernel) | Notebook de pilotage |
-| **pytest** | Tests automatiques (nettoyage, score, regroupement) |
+| Python, pandas | Langage et manipulation des données |
+| lxml | Lecture des fichiers OpenSong |
+| unidecode, lingua | Suppression des accents, détection de la langue |
+| rapidfuzz, scikit-learn | Comparaison des textes malgré les fautes |
+| SQLite | Base du catalogue, en un seul fichier |
+| openpyxl | Fichiers Excel (rapports, vérification) |
+| Jupyter, pytest | Notebook de pilotage, tests |
 
-Il n'y a aucun modèle d'IA dans cette première version : règles, similarité de texte et validation humaine suffisent pour les doublons, les versions et les retitrages. Les traductions et les cas douteux pourront bénéficier d'embeddings ou d'un LLM en V2.
+## Prochaine étape
 
----
-
-## En ligne de commande (facultatif)
-
-```powershell
-.venv\Scripts\python -m fondary import            # 1-2  lire et nettoyer
-.venv\Scripts\python -m fondary match             # 3-6  comparer
-.venv\Scripts\python -m fondary catalogue         # 7, 9 chants et versions
-.venv\Scripts\python -m fondary chercher "a toi la glore"
-.venv\Scripts\python -m fondary set liste.txt --nom "Culte 2026-11-15"
-.venv\Scripts\python -m fondary annoter-export    # paires à vérifier dans Excel
-.venv\Scripts\python -m fondary annoter-import --author "Prénom"
-.venv\Scripts\python -m pytest                    # tests
-```
-
-## Organisation du code
-
-```
-00_PILOTAGE_COMMENCER_ICI.ipynb   notebook de pilotage
-fondary/
-  opensong.py     lecture des fichiers OpenSong
-  normalize.py    nettoyage des titres et des paroles
-  extract.py      étapes 1-2 : extraction, langue, base SQLite
-  stats.py        rapport de qualité
-  catalog.py      étape 3 : versions et fichier préféré
-  matching.py     étapes 4-6 : candidats, signaux, score (réglages en tête de fichier)
-  clustering.py   étape 7 : regroupement en chants, identifiants stables
-  canonical.py    étape 9 : titres, version de référence, codes et libellés
-  search.py       étape 10 : recherche, liste de célébration, export de set
-  annotate.py     jeu de référence annoté
-  cli.py          commandes
-tests/            tests automatiques
-```
-
-Fichiers générés, non versionnés : `data/catalogue.sqlite`, `reports/`, `annotations/`, `exports/sets/`.
-
-## Où en est le projet
-
-### POC : terminé ✅
-
-- [x] Lecture, nettoyage et rapport de qualité (5 284 fichiers)
-- [x] Doublons exacts, candidats, score, relation
-- [x] Regroupement en chants, catalogue, codes et libellés de versions (2 991 chants)
-- [x] Recherche tolérante aux fautes, liste de célébration, export de set OpenSong
-- [x] 300 paires annotées et validées, poids et seuils calibrés : précision ≈ 96 %, rappel ≈ 87 %
-- [x] Set généré ouvert et affiché correctement dans OpenSong
-
-### MVP : prochaine étape
-
-- [ ] Application simple pour l'équipe (sans notebook ni Python) : **Chercher**, **Préparer un culte**, **Vérifier**
-- [ ] Préparer un culte : choix du chant quand il y a des homonymes, choix de la version, set déposé directement dans OpenSong
-- [ ] Journal d'usage : la version la plus projetée est proposée comme version par défaut, après validation par un éditeur
-- [ ] Lecture des anciens sets de l'église pour connaître l'usage réel dès le départ
-- [ ] Installation sur le poste de projection
-
-### V2 : intelligence artificielle là où les règles ne suffisent pas
-
-- [ ] Rapprochement des traductions et des adaptations par le sens (embeddings multilingues)
-- [ ] Aide à la décision sur les cas incertains (LLM, toujours validé par un humain)
-- [ ] Recherche par thème (« un chant sur la paix pour l'Avent »)
+Une application simple pour l'équipe de projection, avec trois écrans :
+- **Chercher** un chant ;
+- **Préparer un culte**, avec le choix de la version ;
+- **Vérifier** les cas douteux.
