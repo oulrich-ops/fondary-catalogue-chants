@@ -116,16 +116,24 @@ def resolve_list(con: sqlite3.Connection, idx: Index, text: str) -> pd.DataFrame
     return pd.DataFrame(rows)
 
 
-def export_set(resolved: pd.DataFrame, name: str, out_dir: Path) -> Path:
+def export_set(resolved: pd.DataFrame, name: str, out_dir: Path, songs_subfolder: str = "",
+               strip_extension: bool = False) -> Path:
     """Écrit un set OpenSong (fichier NOUVEAU ; les chants existants ne sont pas touchés).
 
-    name = nom du fichier chant dans le dossier Songs d'OpenSong, path = sous-dossier éventuel.
+    Dans le set, name = nom du fichier chant, path = son sous-dossier DANS le dossier Songs d'OpenSong.
+    songs_subfolder : à renseigner si le dossier analysé est lui-même un sous-dossier de Songs
+    (ex. « Chants XML » si les chants sont dans Songs/Chants XML/).
+    strip_extension : True si, dans OpenSong, les fichiers chants n'ont pas l'extension .xml
+    (format natif d'OpenSong).
     """
+    prefix = songs_subfolder.strip("/\\")
     groups = []
     for r in resolved[resolved.statut != "introuvable"].itertuples():
         p = PurePosixPath(r.fichier)
-        sub = "" if str(p.parent) == "." else f"{p.parent}/"
-        groups.append(f'    <slide_group name={quoteattr(p.name)} type="song" presentation="" path={quoteattr(sub)}/>')
+        parts = [x for x in (prefix, "" if str(p.parent) == "." else str(p.parent)) if x]
+        sub = "/".join(parts) + "/" if parts else ""
+        song_name = p.stem if strip_extension and p.suffix.lower() == ".xml" else p.name
+        groups.append(f'    <slide_group name={quoteattr(song_name)} type="song" presentation="" path={quoteattr(sub)}/>')
     xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
            f"<set name={quoteattr(name)}>\n  <slide_groups>\n" + "\n".join(groups) +
            "\n  </slide_groups>\n</set>\n")
