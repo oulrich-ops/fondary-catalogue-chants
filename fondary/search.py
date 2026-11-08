@@ -116,6 +116,12 @@ def resolve_list(con: sqlite3.Connection, idx: Index, text: str) -> pd.DataFrame
     return pd.DataFrame(rows)
 
 
+def check_set_files(resolved: pd.DataFrame, songs_dir: Path) -> list[str]:
+    """Chemins du set absents du dossier de chants (doit être vide avant de projeter)."""
+    keep = resolved[resolved.statut != "introuvable"]
+    return [f for f in keep.fichier if not (songs_dir / f).is_file()]
+
+
 def export_set(resolved: pd.DataFrame, name: str, out_dir: Path, songs_subfolder: str = "",
                strip_extension: bool = False) -> Path:
     """Écrit un set OpenSong (fichier NOUVEAU ; les chants existants ne sont pas touchés).
