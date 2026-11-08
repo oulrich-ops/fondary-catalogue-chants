@@ -32,7 +32,7 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
 ```
 
-Ouvrir **`00_PILOTAGE_COMMENCER_ICI.ipynb`** dans VS Code et exécuter les cellules dans l'ordre.
+Ouvrir **`main.ipynb`** dans VS Code et exécuter les cellules dans l'ordre.
 Les chants sont attendus dans `chant_xml/Chants XML/`. Ce dossier n'est pas publié, car les paroles sont soumises au droit d'auteur.
 
 ## Outils
