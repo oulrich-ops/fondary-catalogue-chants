@@ -114,10 +114,25 @@ Fichiers générés, non versionnés : `data/catalogue.sqlite`, `reports/`, `ann
 
 ## Où en est le projet
 
-- [x] Lecture, nettoyage et rapport de qualité
+### POC : terminé ✅
+
+- [x] Lecture, nettoyage et rapport de qualité (5 284 fichiers)
 - [x] Doublons exacts, candidats, score, relation
-- [x] Regroupement en chants, catalogue, codes et libellés de versions
-- [x] Recherche, liste de célébration, export de set OpenSong
-- [x] Annoter 300 paires et régler les poids et seuils : précision ≈ 96 %, rappel ≈ 87 % sur ces paires (annotations faites par Claude, à faire relire par un humain)
-- [ ] Écran de revue (valider, fusionner, séparer) pour les éditeurs du catalogue
-- [ ] Tester un set exporté dans OpenSong sur un vrai culte
+- [x] Regroupement en chants, catalogue, codes et libellés de versions (2 991 chants)
+- [x] Recherche tolérante aux fautes, liste de célébration, export de set OpenSong
+- [x] 300 paires annotées et validées, poids et seuils calibrés : précision ≈ 96 %, rappel ≈ 87 %
+- [x] Set généré ouvert et affiché correctement dans OpenSong
+
+### MVP : prochaine étape
+
+- [ ] Application simple pour l'équipe (sans notebook ni Python) : **Chercher**, **Préparer un culte**, **Vérifier**
+- [ ] Préparer un culte : choix du chant quand il y a des homonymes, choix de la version, set déposé directement dans OpenSong
+- [ ] Journal d'usage : la version la plus projetée est proposée comme version par défaut, après validation par un éditeur
+- [ ] Lecture des anciens sets de l'église pour connaître l'usage réel dès le départ
+- [ ] Installation sur le poste de projection
+
+### V2 : intelligence artificielle là où les règles ne suffisent pas
+
+- [ ] Rapprochement des traductions et des adaptations par le sens (embeddings multilingues)
+- [ ] Aide à la décision sur les cas incertains (LLM, toujours validé par un humain)
+- [ ] Recherche par thème (« un chant sur la paix pour l'Avent »)
